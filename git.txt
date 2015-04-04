@@ -1,0 +1,54 @@
+everything is local.
+git stores data as a series of snapshots not diffs.
+snapshot = commit
+  untracked files = don't exist in previous snapshot
+  git add: start tracking a file
+  staging area: what 'commit' works on
+3 areas: working directory, staging area (cache), repository
+  git status -s: staged,workingdir = changes to be committed/not staged 4 commit
+  git diff: changed but not yet staged
+  git diff --staged: staged changes vs last commit
+  git commit -m 'message'
+  git commit -a: automatically stage every tracked file before doing the commit
+  git log --pretty=format:"%h - %an, %ar : %s" [output piped thru pager]
+  git commit --amend: commit from staging area, edit commit-message
+  git reset HEAD <file to unstage>: unstage ie undo add
+  git checkout -- file: undo work!
+  git fetch remote-name # when you clone, remote repository = "origin"
+     clone: establishes reference to remote repository named "origin"
+     fetch: refs to all branches from that remote
+     remote add shortname url: creates reference to all branches on that remote.
+  git pull: auto fetch + merge remote branch into your current branch
+  git push remote-name branch-name
+  git remote show origin
+  git tag: lightweight tag = pointer to a specific commit.
+  git tag -a: annotated tag stored as full objects in git db (cksm/an/ae/ad/s)
+  git show tag-name
+3 config files
+  linux-xlnx/.git/config: repository-specific config
+  ~/.gitconfig: user-specific ("global") config
+  /etc/gitconfig: system-wide config
+--------------------------------------------------------------------------------
+http://schacon.github.io/gitbook/1_the_git_object_model.html
+object = {type, size, content}
+4 obj types = {blob, tree, commit, tag}
+	commit obj points to a single tree
+	tag marks a commit
+	blob is nothing but data - no attributes (no filename)
+	tree represents content of a directory
+
+commit object = {
+    ptr to snapshot you staged
+    an/ae/s
+    ptr to parent commits (0 for initial, 1 for normal commit, >1 for merge)
+}
+--------------------------------------------------------------------------------
+I find no tags on urepo; view tags on kestrel
+--------------------------------------------------------------------------------
+update-eyes: may want optional layer of dev-only installs. Or not.
+--------------------------------------------------------------------------------
+cd kestrel:~; git init notes
+include logrotate notes
+on laptops, configure git remote server
+   git pull
+   git push origin master # you must have write access

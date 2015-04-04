@@ -1,0 +1,8 @@
+-------------------------------
+extract text between line numbers
+linuxcommando.blogspot.com/2008/03/using-sed-to-extract-lines-in-text-file.html
+  sed -n 2,4p somefile.txt
+-------------------------------
+extract text between patterns
+http://www.cyberciti.biz/faq/sed-display-text/
+  sed -n 'FOO/,/BAR/p' test.txt
