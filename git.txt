@@ -1,6 +1,8 @@
 everything is local.
 git stores data as a series of snapshots not diffs.
 snapshot = commit
+staging a file {checksums it, stores blob in repo}
+commit {checksums each directory, stores tree objs in repo, creates commit obj}.
   untracked files = don't exist in previous snapshot
   git add: start tracking a file
   staging area: what 'commit' works on
@@ -14,7 +16,7 @@ snapshot = commit
   git commit --amend: commit from staging area, edit commit-message
   git reset HEAD <file to unstage>: unstage ie undo add
   git checkout -- file: undo work!
-  git fetch remote-name # when you clone, remote repository = "origin"
+  git fetch remote-name # bring down new remote branches
      clone: establishes reference to remote repository named "origin"
      fetch: refs to all branches from that remote
      remote add shortname url: creates reference to all branches on that remote.
@@ -24,6 +26,51 @@ snapshot = commit
   git tag: lightweight tag = pointer to a specific commit.
   git tag -a: annotated tag stored as full objects in git db (cksm/an/ae/ad/s)
   git show tag-name
+  git branch testing # creates new ptr at current commit.
+  git checkout testing # switch ptr to checked out branch ie move HEAD
+  # >>> example: 2 types of merge
+  git branch iss53 # work on issue #53
+  git checkout iss53
+  git checkout master # revert to production (trunk) branch
+  git checkout -b hotfix # shorthand: git branch hotfix && git checkout hotfix.
+  # to merge, 1st checkout the the branch you wish to merge into, then merge:
+  git checkout master
+  git merge hotfix # fast-forward: commit is direct ancestor of branch
+  git branch -d hotfix # delete it
+  git checkout iss53 # complete work on issue #53
+  git checkout master
+  git merge iss53 # a 'merge commit' has >1 parent.
+  git branch -d iss53
+  # <<< end of example
+  git branch # no args: listing of current branches
+  # >>> partner pushes branch to server; you fetch branches; then merge
+  git push origin fix:serverfix # take my fix & make it the remote's serverfix
+  git fetch origin
+  git merge origin/serverfix
+  git checkout -b localfix origin/serverfix # manually set tracking branch
+  # <<<
+  git branch -u origin/serverfix # change upstream branch you're tracking
+  #
+  git branch -vv # show state of tracking branches since last fetch
+  git fetch --all; git branch -vv # sync cache with servers
+  # fetch doesn't modify your working dir
+  git pull # fetch + merge: advised "better to simply use explicit fetch+merge.
+--------------------------------------------------------------------------------
+Plumbing vs porcelain
+  git hash-object -w test.txt # creates blob named <key> under .git
+  git cat-file -p <key>
+  git cat-file -t <key> # show type (how git can tell? obj hdr = "type size\0").
+  git cat-file -p master^{tree}
+  # git creates trees from staging area index. Create {blob, tree, commit}:
+  git hash-object -w test.txt # store blob
+  git update-index test.txt   # update index
+  git update-index --add new.txt
+  git write-tree # write out tree obj from index (create tree if doesn't exist)
+  git commit-tree <key> -p <parent-key> # write commit obj pointing to snapshot
+  # object storage:
+  fwrite(fname=key, data=zlib.deflate(hdr+content))
+
+--------------------------------------------------------------------------------
 3 config files
   linux-xlnx/.git/config: repository-specific config
   ~/.gitconfig: user-specific ("global") config
@@ -32,16 +79,33 @@ snapshot = commit
 http://schacon.github.io/gitbook/1_the_git_object_model.html
 object = {type, size, content}
 4 obj types = {blob, tree, commit, tag}
+	blob is nothing but data - no attributes (no filename)
+	tree represents a directory = {mode, type, key, filename} entries
+	   modes = {100644, 100755, 120000 (symlink)}
 	commit obj points to a single tree
 	tag marks a commit
-	blob is nothing but data - no attributes (no filename)
-	tree represents content of a directory
-
 commit object = {
-    ptr to snapshot you staged
+    ptr of snapshot you staged
     an/ae/s
     ptr to parent commits (0 for initial, 1 for normal commit, >1 for merge)
 }
+A branch (blob type?) is simply a lightweight movable ptr to a commit.
+'git init' creates 'master' branch; commit moves checked-out branch fwd.
+A branch is a simple 41-byte file "chksum\n" of the commit it points to.
+A remote branch = remote/branch = ptr/ref to branches in remote repositories.
+Tracking branch = local branch w/ direct relationship to a remote branch.
+  'git pull' auto knows which server to fetch from & branch to merge into.
+  The remote branch you're tracking is the 'upstream' branch.
+  auto-track: clone/checkout create tracking branch
+  manual-track: see above
+--------------------------------------------------------------------------------
+.git directory = {HEAD, index, objects, refs}
+HEAD = currently-checked-out branch
+objects = database content (blobs for reg files & commits; trees)
+refs = branches = ptrs to commit objects
+index = staging area info
+--------------------------------------------------------------------------------
+git = (CAS) content-addressable filesystem. Store content, get key.
 --------------------------------------------------------------------------------
 I find no tags on urepo; view tags on kestrel
 --------------------------------------------------------------------------------
