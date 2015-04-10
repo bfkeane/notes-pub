@@ -3,6 +3,7 @@ git stores data as a series of snapshots not diffs.
 snapshot = commit
 staging a file {checksums it, stores blob in repo}
 commit {checksums each directory, stores tree objs in repo, creates commit obj}.
+git = (CAS) content-addressable filesystem. Store content, get key.
   untracked files = don't exist in previous snapshot
   git add: start tracking a file
   staging area: what 'commit' works on
@@ -82,6 +83,7 @@ object = {type, size, content}
 	blob is nothing but data - no attributes (no filename)
 	tree represents a directory = {mode, type, key, filename} entries
 	   modes = {100644, 100755, 120000 (symlink)}
+	   why tree dir-entry records 'type' if that's already in node hdr?
 	commit obj points to a single tree
 	tag marks a commit
 commit object = {
@@ -92,7 +94,7 @@ commit object = {
 A branch (blob type?) is simply a lightweight movable ptr to a commit.
 'git init' creates 'master' branch; commit moves checked-out branch fwd.
 A branch is a simple 41-byte file "chksum\n" of the commit it points to.
-A remote branch = remote/branch = ptr/ref to branches in remote repositories.
+A remote branch = remote/branch = ptr-ref to branches in remote repositories.
 Tracking branch = local branch w/ direct relationship to a remote branch.
   'git pull' auto knows which server to fetch from & branch to merge into.
   The remote branch you're tracking is the 'upstream' branch.
@@ -105,7 +107,6 @@ objects = database content (blobs for reg files & commits; trees)
 refs = branches = ptrs to commit objects
 index = staging area info
 --------------------------------------------------------------------------------
-git = (CAS) content-addressable filesystem. Store content, get key.
 --------------------------------------------------------------------------------
 I find no tags on urepo; view tags on kestrel
 --------------------------------------------------------------------------------
