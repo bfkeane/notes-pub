@@ -1,1 +1,85 @@
-ehll
+p4. On private NTP subnet, one or more servers may be primary = own timescale.
+p5. Methinks NTP security on private subnet is not an issue.
+p6. For ms accuracy, client/server updates every 15min.
+    For 10x less accuracy, 1 1/2 days.
+p7. NTP = gigantic DSP. Filter: trimmed mean & median methods.
+p8. Selection algorithm: truechimers vs falsetickers.
+    Clock discipline algo: NTP minimizes T & R (time & freq offsets).
+    Discipline ftns as feedback loop: measure offset, adj sysclk time & freq.
+    Design parameter: time constant ie responsiveness to time/freq variations,
+       which depends on client poll interval ~ 15min.
+p9. Limits of NTP:
+      Intrinsic freq error <= 500ppm.
+      34-year limit (2^30 seconds) vs Unix clk=1970. Since NTP can't determine
+          era nbr, hence need for ntpdate, eh?
+p12. Basically NTP occasionally reads server clk to tell if local clk is
+     fast/slow and nudges the clk oscillator like Big Ben timekeepers.
+p17. Ordinry cmptr clk = quartz osc VS radio/satellite or calibrated atomic clk.
+     Access ctls selectively allow/dny reqs and limit req service rate.
+p19. NTP can determine era via file timestamp.
+p20. Processes: 
+		poll & peer processes: theta, delta.
+		clk filter process: select best from prev 8
+		selection process:  truechimers vs falsetickers.
+		clustering process: select on basis of stats.
+		combining: weighted avg of 3 candidates offsets.
+			weighting = quality metric = sync (aka root) distance.
+		result = sysclk offset wrt server pop
+	results processed by (feedback) loop filter: incr adjustments every 1sec
+	NTP subnet = forest of trees: root distance=distance to primary srvrs.
+ 	Distributed Bellman-Ford routing algo = minimizes root distances.
+p21. Unix adjtimex() to nudge sysclk. Typical temp coeff = 1 ppm / degC.
+p22. Your NTP nodes should only ever run as clients.
+     Client config file specifies persistent associations.
+     3 modes: client/server (pull), symmetric, bdcast (push).
+p23. Bdcast mode: (server?) config file specifies subnet address.
+		srvr gens msg every ~minute
+		client responds after random interval;
+		client polls srvr using burst feature.
+p24. Burst (batch) of msgs (over single connection?): 
+	"client sets the clk w/in 10s after 1st msg."
+p24. Auto discovery: NTP pool. DNS server returns 15 randomly selected srvrs.
+p26. Critically damped response characteristic. Undersampling can be disastrous.
+p27.	time offset > 1000s:
+		NTP panics: tells operator to manually set clock.
+	time offset < 128ms:
+		slew clk (amortize offsets) at 1sec intervals
+	time offset > 128ms:
+		step clk (lesser of 2 evils: bc limit on slewing < 500ppm)
+        <wiki/Slew: tiny adjs in clk freq to adjust for clk skew>
+p29. Error: deterministic (measurable, correctable) vs non-det.
+	Dispersion = freq offset, clk reading precision. Grows between updates.
+	Kernel API: max error vs expected error.
+	 max error = Root distance = server-vs-client <= RTT + dispersion.
+	expected error = system jitter = non-deterministic.
+p38. Drift = 1st derivative of freq.
+	Wander = RMS diff between series of freq offsets.
+	Jitter = RMS diff between series of time offsets.
+	t = epoch, T(t) = time displayed by a clk
+p40. Association = peer + poll processes. Mobilizing = birth, demob=death.
+	Undying assoc = persistent (vs preemptable or ephemeral).
+	Pkt in -> cmp with sysclk -> groomed -> clk displine=LPfilter.
+	ACL entry = {IP, mask, capability}.
+p41	Crytographic (pubkey or symmetric key) checks.
+
+p81. Selecting sources: root distance = root dispersion + .5 * root delay.	
+     Selection & combining algos use root distance metric.
+     Clustering algo sorts by stratum then by root distance.
+p81.	stratum 2: Corporate/campus backbone routers = 
+	stratum 3: Dept srvrs
+	stratum 4: Workstations, PC using unicast or bdcast modes. <-
+p84. Cisco routers (no TOY chip): panic threshold set to 0.     
+	See: http://doc.ntp.org/4.1.1/ntpd.htm?advanced=on
+p85. Use iburst=1 with poll intervals on the order of hours.     
+p88. Heavily loaded machines are not best choice for NTP server.
+--------------------------------------------------------------------------------
+	See: http://doc.ntp.org/4.1.1/ntpd.htm?advanced=on
+Use iburst: "initial delay to set the clock can be reduced".
+With ntpd -gq ("one-time mode ntpd"), is ntpdate necessary?
+"Freq Discpline": Does ntp.drift exist?
+"Operating Modes" para 1: "can operate in a one-time mode" requires ntp.drift?
+   para 3: iburst: "set in about a minute".
+Configuration options (confopt.htm):
+  'server' command specifies persistent client mode assoc with server.
+  "Authentication Support" para 5: "acceptable to disable authentication":
+  use IP addresses instead of host names.
