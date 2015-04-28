@@ -1,0 +1,33 @@
+If client set-emac-addr fails, then maybe that would cause your failures?
+Or maybe there's a race wherein dhclient uses orig emac addr even though
+set-emac-addr has just modified it.
+Does client recv NAK?
+Or does client recv neither ACK or NAK?
+--------------------------------------------------------------------------------
+DORA + arp probe
+non-authoritative srvr ignores req.
+What is srvr's lease duration? S/b fixed assignment, inf duration.
+	If you change it, does boot-eyes test result chg?
+Does client send RELEASE req on shutdown?
+	How does srvr react to request once client reboots?
+Client attempts to renew after 1/2 lease
+--------------------------------------------------------------------------------
+3 IP addr alloc mechanisms: auto, dyn, manual. Eyes = manual, svc laptops=dyn.
+Scn 1.6. Client config should retain across client (& srvr) reboot.
+Scn 3.1 Admin may disable srvr probes of newly alloc'd addrs.
+	Some clients may goto REQ (skip DISCOVER) on reboot. Does yours?
+	Client times out & re-xmits DISCOVER if recv no reply.
+	On no ack/nak, client may re-xmit REQ 4x for 60secs then revert to INIT.
+Scn 3.2 Client wishing to reuse previous IP may omit DISCOVER and issue REQ.
+	Client rexmits REQ if recvs neither ACK or NACK.
+  	If client recvs NAK, it must return to INIT state.
+	Client does not normally RELEASE on shutdown.
+Scn 3.3. Time values (32bit seconds) are relative to client clock.
+	But what if client clock jumps 45 years immediately after DHCP bound?
+	Won't client consider lease expired?
+		client obtains lease at time 10, good til time 1e3.
+		client ntpdate steps time to 1e6.
+		client shuts down; dhclient saves lease
+		client boots; time=1, sees lease not expired.
+Scn 4.1. Client responsible for msg rexmit.
+	Exponential backoff: delay 4, 8, 16, 32, 64sec (randomized +/- 1).
