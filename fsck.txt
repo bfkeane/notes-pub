@@ -1,0 +1,48 @@
+tune2fs -c max-mount-counts
+	value of 0 or -1 disables count-dependent chking.
+	if mount-count > max-mount-counts, fsck will chk fs at next reboot.
+if journaling, fs is _never_ marked dirty so it won't be checked unless there's
+a filesystem error - which may be too late.
+
+tune2fs -i interval-between-checks[d|m|w]
+	value of 0 disables time-dependent chking.
+
+STRONGLY RECOMMENDED that either -c or -i checking be enabled to force periodic
+fsck.
+
+tune2fs -e error-behavior
+	what is it now?
+--------------------------------------------------------------------------------
+e2fsck -f: force chking even if fs seems clean
+one of {y, n, p}
+e2fsck -y: assume answer 'yes' to all questions
+e2fsck -n: open fs read-only and assume answer 'no' to all questions
+e2fsck -p: auto-repair (preen); print desc+exit if need sysadmin intervention.
+--------------------------------------------------------------------------------
+mountall.conf
+	[ -f /forcefsck ] && force_fsck=--force-fsck: fsck -f
+	[ $FSCKFIX = yes ] && fsck_fix=--fsck-fix # /etc/default/rcS: fsck -y
+	if FSCKFIX=no, mountall invokes fsck -a = fsck -p.
+	mountall --daemon $force_fsck $fsck_fix
+--------------------------------------------------------------------------------
+mount(8)
+	check=nocheck is the default.
+--------------------------------------------------------------------------------
+e2fsck(8)
+	ext3=ext2+journal.
+	on ext3, e2fsck normally runs the journal, marks fs clean, and exits,
+		unless superblock indicates further checking needed.
+--------------------------------------------------------------------------------
+So I'm guessing:
+	mountall runs fsck (even on rootfs?), but fsck only runs the journal
+	if needed then exits. Unless 
+		tune2fs interval-or-count have expired
+		superblock is marked with errors (never marked dirty for ext3)
+		fsck -f
+	which "force periodic _full_ e2fsck checking of the filesystem."
+	What you did Wednesday 29Apr was a quick-run not a full-run.
+From mountall.conf, seems
+	boot-eyes --fsck
+should simply touch /forcefsck then reboot. On bootup, mountall will invoke
+	fsck -f -a
+and then mountall's post-stop script will remove the /forcefsck file.

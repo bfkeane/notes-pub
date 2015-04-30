@@ -1,0 +1,32 @@
+See rsync manpage Examples: backup Sofi's computer.
+------------------
+--itemize-changes is equiv to adding %i to %n%L
+itemize-changes:
+
+YXcstpoguax
+Y=update type={>, <, c, h, .}
+c  local change/creation (mkdir, chng symlink)
+h hard link
+.  not modified
+
+X=filetype = {f, d, l, D, S}
+
+9 attrs as follows or +=new item, .=identical item
+c=chksum diff
+s=size diff
+t=time diff
+p=perms diff
+o=owner diff
+g=group diff
+u=<undef>
+a=ACL diff
+x=extended attr diff
+------------------
+--log-file=FILE
+--log-file-format=FORMAT
+	default FORMAT='%i %n%L'
+-----------
+what: %f(or %n) %L %o
+why: %M %l
+ %i
+mode: %U %G %B
