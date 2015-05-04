@@ -5,6 +5,8 @@ itemize-changes:
 
 YXcstpoguax
 Y=update type={>, <, c, h, .}
+<=sent
+>=recvd
 c  local change/creation (mkdir, chng symlink)
 h hard link
 .  not modified

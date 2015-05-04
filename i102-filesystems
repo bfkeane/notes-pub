@@ -1,0 +1,99 @@
+filesystem choices:
+ wiki/Secure_Digital
+ wiki/Flash_memory#NAND_flash
+ wiki/MTD
+ wiki/Flash_file_system
+ BELS=Building Embedded Linux Systems p79,247
+ http://unix.stackexchange.com/questions/136269/corruption-proof-sd-card-filesystem-for-embedded-linux
+ CHOICE=http://superuser.com/questions/248078/choice-of-filesystem-for-gnu-linux-on-an-sd-card
+wiki "Risks of reformatting": mkfs may shorten its lifetime.
+wiki/Flash_memory: NAND flash=core USB flash drives & most memory cards, SSDs.
+ bad blk mngt: SD card ctlr performs wear leveling.
+ NAND: higher density, capacity, seq-access & erase rates.
+ NOR: random-access, execute-in-place.
+ Flash file systems used for MTDs = flashmem w/out ctlr. Cf BELS p238.
+wiki/MTD: should not confuse MTD w/ USB sticks, MMCs, SDs, CompactFlash.
+ The latter have blkdev iface using FTL (defd by PCMCIA: wiki/Flash_file_system)
+wiki/Flash_file_system: blkdev iface is suboptimal for flash-based storage.
+ Log-structured filesys is good flash file system: bg erase blks, wear leveling.
+CONCLUSION: ffs is for raw non-blkdev device; ext4 is for blkdev which includes 
+  SD (hardware FTL).
+ JFFS2 has power-down reliability PDR but apparently isn't designed for SD card.
+ We can circumvent PDR problem by NFS-mounting $pbroot, move pb_log to network/
+ tmpfs, mount root read-only, mount tmpfs on /var.
+--------------------------------------------------------------------------------
+readonly-rootfs: how can we partition rootfs to make it read-only?
+This would make base system power-down reliable.
+
+ https://wiki.debian.org/ReadonlyRoot (last edited 21Feb2015).
+mtab -> /proc/self/mounts
+resolv.conf: we could just make this static/readonly; chg dhclient-script.
+	or use resolvconf pkg (on urepo but not currently on eyes):
+ 	  . this has a dhclient-enter-hook that undefines make_resolv_conf().
+	  . BTW: you can override set_hostname() the same way rather 
+	    than modify dhclient-script!
+/root: move to /home/root? Leave on readonly / partition?
+
+This debian page recommends fstab option noatime like BELS(242).
+/etc/apt/apt.conf; or just handle this manually.
+--------------------------------------------------------------------------------
+fstab: Can you create 4 partitions?
+/dev/mmcblk0p2 / ext4 defaults,noatime,ro,errors=remount-ro 0 1
+/dev/mmcblk0p3 /var ext4 defaults,noatime                0 2
+/dev/mmcblk0p4 /home ext4 defaults,noatime               0 3
+/dev/mmcblk0p1 /mnt/boot vfat noauto,nodev,nosuid,noauto,noatime,ro,errors=remount-ro 0 4
+
+rootfs/Makefile must install {root, var, home} partitions separately.
+Or simply mount all three directly under /mnt/eye, and leave install as-is.
+Is there anything important in /var that could break system boot if corrupted?
+--------------------------------------------------------------------------------
+/run and children (run/lock, run/shm) are tmpfs (right?).
+But /var is persistent.  Could we make /var readonly?
+Most files under var/lib are var/lib/dpkg=static (could be readonly), but
+there are some that are volatile (and could be tmpfs) - listed below -
+but these are so few that they might as well be kept persistent.
+But that renders /var powerdown-unreliable.
+We could easily move these volatile files to /run.
+Then /var could be (1) readonly and (2) on rootfs partition.
+
+*var/lib/urandom/random-seed: initialized at runtime (no?) ergo tmpfs
+	->etc/init.d/urandom: SAVEDFILE=/run/random-seed
+var/lib/logrotate/status: doubt we use this on eyes
+*var/lib/ntp/ntp.drift: exception: could easily put this somewhere like:
+	->ntp.conf: driftfile /run/ntp.drift
+*var/lib/dhcp/dhclient.eth0.leases: could do without persistent file. Use:
+	->dhclient -lf lease-file /run/dhclient.leases
+var/lib/emacsen-common/state: used?
+var/backups: /etc/cron.daily/: could do without
+var/lock -> /run/lock
+*var/log/{upstart, dmesg, wtmp, btmp}: could do without
+	upstart --logdir /run/...
+	per wtmp(5): if /var/log/wtmp 'is removed, record-keeping is turned off'
+	etc/login.defs "FTMP_FILE /var/log/btmp" = lastb(1)
+		i.e. could set FTMP_FILE=/run/btmp and use 'lastb -f'
+var/cache: grep finds this path referenced in apt+debconf under etc, usr/bin.
+var/run -> /run
+var/spool: user crontabs, plymouth(empty), rsyslog(empty)
+var/local: empty
+var/tmp: empty
+--------------------------------------------------------------------------------
+Alternatives/enhancements:
+Install /home on pbqn and nfs-mount /home.
+
+Note user root will still have HOME=/root on readonly partition
+(unless we set HOME=/home/root which means root might have trouble logging
+into console in single-user mode.) root might get write errors in vim (and what 
+else?) unless we alias vi to 'vi -u /run/root/.vimrc' or
+'vi -u /home/root/.vimrc'.
+--------------------------------------------------------------------------------
+fstab:
+/dev/mmcblk0p2 / ext4 defaults,noatime,ro,errors=remount-ro 0 1
+/dev/mmcblk0p1 /mnt/boot vfat noauto,nodev,nosuid,noauto,noatime,ro,errors=remount-ro 0 4
+/dev/mmcblk0p4 /home nfs ?               0 0
+-----
+
+Keep /home out of rootfs.tar; rootfs/Makefile would make pbqn.tgz with inputs:
+	i102-reference/home
+	rootfs/addons-host
+update-eyes --update-home will install these on pbqn.
+update-eyes --update-app will install pinebrook export under pbqn:~pinebrook.

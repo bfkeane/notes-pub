@@ -24,7 +24,11 @@ Scn 3.2 Client wishing to reuse previous IP may omit DISCOVER and issue REQ.
 	Client does not normally RELEASE on shutdown.
 Scn 3.3. Time values (32bit seconds) are relative to client clock.
 	But what if client clock jumps 45 years immediately after DHCP bound?
-	Won't client consider lease expired?
+	Won't client consider lease expired?  Well, per dhclient(8) manpage:
+	  Old leases are kept around in case the DHCP server is unavailable...
+	  (... during the initial system boot process). In that event old leases
+	  from the chclient.leases file which have not yet expired are tested...
+	Well, these leases will all be in the future.
 		client obtains lease at time 10, good til time 1e3.
 		client ntpdate steps time to 1e6.
 		client shuts down; dhclient saves lease
