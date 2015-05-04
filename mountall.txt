@@ -1,26 +1,83 @@
+!!!!!
+. /lib/init/fstab: revert entry0 to original!!!
+. Either
+  (1) fix uramdisk init script
+  (2) omit uramdisk
+  (3) figure out why mountall.conf hack (mount ro) doesn't work.
+--------------------------------------------------------------------------------
+fsckfix-ro-mountall log:
+. mark_mounted() doesn't report '/' as mounted: good.
+  So mountall.conf hack works so far: ie rootfs is mounted but needs_remount().
+. "try_mount: / waiting for device"?? mark it nobootwait?
 --------------------------------------------------------------------------------
 mounts: list of mounts we need to process, parsed from /etc/fstab + built-ins +
 	prev-mounted filesystems
 --------------------------------------------------------------------------------
 /lib/init/fstab: filesystems always mounted @ boot; /etc/fstabs overrides this.
  every entry is filesystem=none except
-  /dev/root / rootfs defaults 0 1
+  /dev/root / rootfs defaults 0 1 # ????
+--------------------------------------------------------------------------------
+main
+ parse_filesystems
+ parse_fstab(/lib/init/fstab)
+  update_mount
+ parse_fstab(/etc/fstab)
+  update_mount
+ parse_mount
+  parse_mountinfo_file(/proc/self/mountinfo) # who needs /etc/mtab?
+   update_mount
+ mount_policy
+ mark_mounted
+  if mnt.mounted && !needs_remount(): mounted()
+ try_mounts
+--------------------------------------------------------------------------------
+has_option(mnt, option, current)
+ opts = current ? mnt.mount_opts : mnt.opts
+ return TRUE iff any of given option list found in opts
+ # mnt.mounted = <from /proc/self/mountinfo, ie current>
+--------------------------------------------------------------------------------
+needs_remount(mnt)
+ # If currently-mounted ro but fstab says rw.
+ # Ie kernel or uramdisk.init mounted rootfs ro, per bootparam(7).
+ return mnt.mounted && has_option(mnt, "ro", TRUE) !has_option(mnt, "ro", FALSE)
 --------------------------------------------------------------------------------
 update_mount(mnt, device, check, type, opts)
+ # callers set check=(fstab_entry.passno != 0)
  if device: mnt.device = device
- if check >=0: mnt.check = check
+ if check >=0: mnt.check = check # ie leave as-is if check == -1
  if type: mnt.type=type
  if opts: mnt.opts = opts
  D"update_mount: $MOUNT_NAME $mountpoint $device $type $opts $check
 --------------------------------------------------------------------------------
+new_mount(mnt, device, check, type, opts)
+ mnt.mountpoint = mountpoint
+ list_add(mounts, &mnt.entry)
+ update_mount()
+--------------------------------------------------------------------------------
 parse_mountinfo_file(reparsed)
+ # we parse /proc/self/mountinfo, ie currently-active mounts.
+ # We put parsed opts into mnt.mount_opts.
+ # Unless we've never seen this mountpoint before, we leave mnt.opts alone.
  if reparsed: rewind(mountinfo)
- D"updating mounts"
+ D"parse_mountinfo_file: updating mounts"
  while fgets(mountinfo)
    id parent_id major:minor root mountpoint mount_opts type device super_opts
-   mnt = find_mount(mountpoint)
-   if type==rootfs OR device=/dev/root: type=NULL #/lib/init/fstab entry0
-   update_mount(mnt, device, -1, type, NULL)
+   if (mnt = find_mount(mountpoint)):
+    # /lib/init/fstab entry0: creates mnt.mountpoint=/ with NULL device,type
+    if type==(rootfs|swap): type=NULL 		# /lib/init/fstab entry0
+    if device==(/dev/root|none): device=NULL	# /lib/init/fstab entry0
+    update_mount(mnt, device, -1, type, NULL) 	# leave mnt.opts alone
+   else
+    new_mount(mnt, device, -1, type, opts)
+   mnt.mount_opts = opts
+--------------------------------------------------------------------------------
+parse_fstab(filename)
+ D"parse_fstab: updating from $filename"
+ while getmntent(setmntent(filename, "r"))
+   if find_mount()
+    update_mount()
+   else
+    new_mount()
 --------------------------------------------------------------------------------
 spawn(mnt, args, wait, handler)
  parent:
@@ -34,7 +91,7 @@ spawn(mnt, args, wait, handler)
 --------------------------------------------------------------------------------
 spawn_child_handler(proc, status)
   "mount $MOUNT_NAME [$pid] exited normally"
-  if proc->handler: handler(mnt, pid, status) # ie call run_mount_finished()
+  if proc.handler: handler(mnt, pid, status) # ie call run_mount_finished()
 --------------------------------------------------------------------------------
 mounted(mnt)
  mnt.mounted=TRUE
@@ -62,10 +119,56 @@ run_mount(mnt, fake)
  else if !mnt.remote: spawn(wait=TRUE, handler=run_mount_finished)
  else spawn(wait=FALSE, handler=run_mount_finished)
 --------------------------------------------------------------------------------
+emit_event(name, mnt)
+ if mnt:
+  DEVICE=$mnt.device
+  MOUNTPOINT=$mnt.mountpoint
+  TYPE=$mnt.type
+  OPTIONS=$mnt.opts
+  upstart_emit_event(upstart, name, env, TRUE)
+ else
+  upstart_emit_event(upstart, name, NULL, FALSE)
+--------------------------------------------------------------------------------
+try_mount(mnt, force) # force=FALSE always AFAIK
+foreach mnt.deps
+ if dep not mounted: D"$MOUNT_NAME waiting for $dep.mountpoint; return
+# "if there's an underlying dev that udev is going to deal with,
+# we wait for the udev watcher to mark it ready."
+if !mnt.ready & !mnt.nodev & !is_remote(mnt) & mnt.device == /dev/xxx:
+ D"$MOUNT_NAME waiting for device"
+ return
+if !mnt.ready && !is_remote(mnt):
+ run_fsck()
+else
+ emit_event("mounting", mnt)
+ run_mount()
+--------------------------------------------------------------------------------
+try_mounts()  # called from main(); also is our main_loop() callback
+   once this finds all mounts done, calls
+	dbus_server_disconnect(control_server)
+	main_loop_exit(OK)
+   for unmounted (or needs remount) mounts: try_mount()
+       foreach mnt.deps
+  	  if dep not mounted, wait (ie skip this mount)
+   	  if (!mnt.ready && mnt.device == /dev/xxx) wait for udev
+      	  if (!mnt.ready && !remote) run_fsck()
+          else run_mount()
+--------------------------------------------------------------------------------
 run_mount_finished(mnt, pid, status)
  mnt.error = ERROR_NONE
  if !mnt.mounted: <parse mountinfo to see what mount did>
  if !mnt.mounted: mounted(mnt)
+--------------------------------------------------------------------------------
+run_fsck(mnt)
+ if mnt.ready
+  D"$MOUNT_NAME: already ready"
+  try_mount(mnt, FALSE)
+  return
+ else if !mnt.check & (!force_fsck || mnt.mountpoint!=/)
+  D"$MOUNT_NAME: no check required"
+  mnt.ready = TRUE
+  try_mount(mnt, FALSE)
+  return
 --------------------------------------------------------------------------------
 run_fsck_finished()
 man fsck: exit code is the sum of following conditions:
@@ -80,7 +183,7 @@ if (status & 2) exit(EXIT_REBOOT)
 --------------------------------------------------------------------------------
 plymouth_answer(): callback registered for ply_boot_client_ask_daemon_to_watch_for_keystroke():
   plymouth_update(only_clear msg = (keys[0]=={M} ? TRUE: {F,I,S,C} ? FALSE)
-    display highest-priority mnt->error for any fsck in progress:
+    display highest-priority mnt.error for any fsck in progress:
     %s=MOUNT_NAME
     	The disk drive for %s is not ready yet or not present.
 	 Continue to wait, or Press S to skip mounting or M for manual recovery.
@@ -118,7 +221,7 @@ So what does mountall do?
       see fs_passno description on fstab(5) manpage.
       note (line 2327 mountall.c) that rootfs is NOT fsck'd even if force_fsck.
       Is there an fsck.vfat in PATH? (See missing_fsck() line 2332.)
-      line 2344: if mnt->mounted don't fsck it UNLESS it's "ro".
+      line 2344: if mnt.mounted don't fsck it UNLESS it's "ro".
 		Perhaps we fsck /mnt/boot before _and_ after mounting it?
  parses fsck output to update plymouth progress bar:
     wikipedia: Plymouth "also handles user interaction during boot"
@@ -156,7 +259,7 @@ x) init 'mounts' list
 5) init mount table:
     add a new Mount entry to mounts list, 
        unless it's already there in which case update it
-     NB: mnt->check = (passno != 0)
+     NB: mnt.check = (passno != 0)
    Do this for 
 	/lib/init/fstab (builtin fstab)
         /etc/fstab
@@ -168,7 +271,7 @@ x) init 'mounts' list
 	}
 6) mount_policy()
    build already_mounted list; ignore mounts that would hide already-mnted.
-   build mnt->deps: parents of each mount (child mount will wait for parent)
+   build mnt.deps: parents of each mount (child mount will wait for parent)
 x) open_control_server()
     DBusServer = dbus_server( "unix:abstract=/com/ubuntu/mountall", ...)
     register 'DBusInterface control_interfaces[]' on /com/ubuntu/Mountall/Server
@@ -178,16 +281,16 @@ x) open_control_server()
 	dbus_server_disconnect(control_server)
 	main_loop_exit(OK)
    for unmounted (or needs remount) mounts: try_mount()
-       foreach mnt->deps
+       foreach mnt.deps
   	  if dep not mounted, wait (ie skip this mount)
-   	  if (!mnt->ready && mnt->device == /dev/xxx) wait for udev
-      	  if (!mnt->ready && !remote) run_fsck()
+   	  if (!mnt.ready && mnt.device == /dev/xxx) wait for udev
+      	  if (!mnt.ready && !remote) run_fsck()
           else run_mount()
 8) run_mount()
     nih_info("mounting %s")
      spawn({mount -t <typ> -o <opts> device mountpoint}, run_mount_finished)
 9) run_mount_finished()
-    mnt->mounted = TRUE; -> main_loop_interrupt()
+    mnt.mounted = TRUE; -> main_loop_interrupt()
 10) trigger_events() calls upstart_emit_event(upstart) ie via D-Bus:
 	remote-filesystems
 	virtual-filesystems
