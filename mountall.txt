@@ -1,14 +1,126 @@
+Would it help to mountall after startup? (In multiuser mode.)
+--------------------------------------------------------------------------------
+compare ok vs nk (remount ro) log
+mounted: /	vs	try_mount: / waiting for device
+
+'local n/n remote n/n etc' tracks 'mounted event handled for $dev'.
+This is only present in mountall-2.42ubuntu0.4 augh!
+-ok-----------------------------------------------------------------------------
+mounted_event_handled for /
+why run_fsck never called for rootfs? It's called ("no check required") for:
+	/sys/kernel/debug
+	/tmp
+	/run
+	/run/lock
+	/run/shm
+	/run/user
+	{debugfs, tmpfs-x5}
+whereas mounted_event_handled for:
+	/
+	/sys
+	/dev/pts
+	/dev
+	/proc
+	/sys/kernel/debug
+	/run/lock
+	/tmp
+	/run
+	/run/shm
+	/run/user
+	{ext4(rootfs), sysfs, devpts, devtmpfs, proc}
+diff = {/, /sys, /dev/pts, /dev, /proc}.
+--------------------------------------------------------------------------------
+nodev	sysfs
+nodev	rootfs
+nodev	bdev
+nodev	proc
+nodev	cgroup
+nodev	cpuset
+nodev	tmpfs
+nodev	devtmpfs
+nodev	debugfs
+nodev	securityfs
+nodev	sockfs
+nodev	pipefs
+nodev	anon_inodefs
+nodev	devpts
+	ext3
+	ext4
+nodev	ramfs
+nodev	hugetlbfs
+	vfat
+nodev	ecryptfs
+	fuseblk
+nodev	fuse
+nodev	fusectl
+nodev	pstore
+nodev	mqueue
+--------------------------------------------------------------------------------
+State machine
+
+main_loop -> try_mounts ---(all mounted)---> main_loop_exit
+                |
+             try_mount ---(ready)--->[mounting]---->[mounted]--->trigger_events
+                |
+                ----------fsck------>fsck_finished--->[ready]--->#try_mount
+                                |
+                               (plymouth)
+--------------------------------------------------------------------------------
+important call trace:
+
+try_mount(mnt, force=FALSE-always)
+ if !mnt.ready 
+  run_fsck(mnt)
+ else
+  emit_event("mounting", mnt, mounting_event_handled)
+   mounting_event_handled(data=mnt, DbusMessage message)
+    I"mounting event handled for $mountpoint"
+    run_mount(mnt, fake=FALSE)
+     spawn(mnt, "mount ...", TRUE, run_mount_finished)
+      if !mnt.mounted
+       parse_mountinfo()
+      mounted(mnt)
+       D"$mountpoint"
+       emit_event("mounted", mnt, mounted_event_handled)
+        mounted_event_handled(data=mnt, DBusMessage message)
+         mnt.mounted = TRUE
+         main_loop_interrupt()
+         I"mounted event handled for $mountpoint"
+         mnt.mount_opts = NULL
+         if written_mtab & mnt.needs_mtab	??
+          run_mount(mnt, fake=TRUE)  		??
+         increment num_TAG_mounted where TAG={local, remote, virtual, swap}
+         trigger_events()
+         fsck_update()
+        
+--------------------------------------------------------------------------------
 !!!!!
 . /lib/init/fstab: revert entry0 to original!!!
 . Either
   (1) fix uramdisk init script
   (2) omit uramdisk
   (3) figure out why mountall.conf hack (mount ro) doesn't work.
+. /mnt/boot fstab (etc or lib/init) is broken: 
+      "mount_policy: /mnt/boot: dropping noauto filesystem"
+      ie "noauto" is not meant to be a filesystem type. VFAT is!
+. udev.conf: 'start on virtual-filesystems'. 
+  in fsckfix-ro-mountall, 5/10 virtual are mounted:
+	line84-90: mounted: {/proc, /sys, /dev, /dev/pts}
+	line106: virtual 1/10
+	line109: virtual 2/10
+	line181: virtual 5/10
+	*/sys/kernel/debug, */tmp, */run, /run/lock, /run/shm, /run/user
+
+	/sys/kernel/debug, /tmp
+  	{/dev, /dev/pts, /proc, /sys, /sys/kernel/debug}
+  	{/run, /tmp}
+  deadlock: udev is waiting for virt-filesystems, mountall is waiting for udev.
 --------------------------------------------------------------------------------
 fsckfix-ro-mountall log:
-. mark_mounted() doesn't report '/' as mounted: good.
+mark_mounted() doesn't report '/' as mounted: good.
   So mountall.conf hack works so far: ie rootfs is mounted but needs_remount().
-. "try_mount: / waiting for device"?? mark it nobootwait?
+"try_mount: / waiting for device"?? mark it nobootwait?
+We never see D"try_udev_device...". So we never recv udev events?
 --------------------------------------------------------------------------------
 mounts: list of mounts we need to process, parsed from /etc/fstab + built-ins +
 	prev-mounted filesystems
@@ -20,16 +132,203 @@ mounts: list of mounts we need to process, parsed from /etc/fstab + built-ins +
 main
  parse_filesystems
  parse_fstab(/lib/init/fstab)
-  update_mount
+  update_mount <16x>
  parse_fstab(/etc/fstab)
-  update_mount
+  update_mount: /tmp
+  update_mount: /
+  update_mount: /mnt/boot
  parse_mount
   parse_mountinfo_file(/proc/self/mountinfo) # who needs /etc/mtab?
-   update_mount
+   update_mount: /
+   update_mount: /dev
+   update_mount: /dev/pts
+   update_mount: /proc
+   update_mount: /sys
  mount_policy
+  all but rootfs is mnt.tag=VIRTUAL.
  mark_mounted
-  if mnt.mounted && !needs_remount(): mounted()
+  # rootfs not marked because it needs_remount().
+  mounted: /proc [line84]
+  mounted: /sys
+  mounted: /dev
+  mounted: /dev/pts
+ control_server_open
  try_mounts
+  try_mount: / waiting for device # ??
+  mount /sys/kernel/debug &
+  mount /tmp &
+  mount /run &
+  try_mount: /run/lock waiting for /run
+  try_mount: /run/shm waiting for /run
+  try_mount: /run/user waiting for /run
+ udev_catchup
+  try_udev_device
+ main_loop
+ ---
+mounted_event_handled for /sys
+ ?
+  trigger_events # called from where? mounted (I think) since latter 
+  		# also calls fsck_update; but who called mounted?
+   I"swap finished"
+   I"local 0/1 remote 0/0 virtual 1/10 swap 0/0" [line106]
+   fsck_update: updating check priorities
+mounted event handled for /dev/pts # udev lib?
+ I"local 0/1 remote 0/0 virtual 2/10 swap 0/0"
+try_mounts # main_loop callback
+ try_mount: / waiting for device  # ??
+ try_mount: /run/lock waiting for /run
+ try_mount: /run/shm waiting for /run
+ try_mount: /run/user waiting for /run
+mounting event handled for /sys/kernel/debug # (udev lib?)
+ run_mount
+  I"mounting /sys/kernel/debug"
+  spawn: mount -n -t debugfs -o none /sys/kernel/debug [820] 
+spawn_child_handler
+ I"[820] exited normally"
+  run_mount_finished # proc.handler
+   parse_mountinfo
+    parse_mountinfo_file: updating mounts
+     update_mount: /
+     update_mount: /dev
+     update_mount: /dev/pts
+     update_mount: /proc
+     update_mount: /sys
+     update_mount: /sys/kernel/debug <= new
+     mounted: /sys/kernel/debug
+      fsck_update: updating check priorities
+mounting event handled for /tmp # (udev lib?)
+ run_mount
+  I"mounting /tmp"
+  spawn: mount -n -t tmpfs -o defaults,noexec,nosuid tmpfs /tmp [821]
+spawn_child_handler
+ I"[821] exited normally"
+  run_mount_finished # proc.handler
+   parse_mountinfo
+    parse_mountinfo_file: updating mounts
+     update_mount: /
+     update_mount: /dev
+     update_mount: /dev/pts
+     update_mount: /proc
+     update_mount: /sys
+     update_mount: /sys/kernel/debug
+     update_mount: /tmp <= new
+     mounted: /sys/kernel/debug
+      fsck_update: updating check priorities
+mounting event handled for /run # (udev lib?)
+ run_mount
+  I"mounting /run"
+  spawn: mount -n -t tmpfs -o noexec,nosuid,size=10%,mode=0755 none /run [824]
+spawn_child_handler
+ I"[824] exited normally"
+  run_mount_finished # proc.handler
+   parse_mountinfo
+    parse_mountinfo_file: updating mounts
+     update_mount: /
+     update_mount: /dev
+     update_mount: /dev/pts
+     update_mount: /proc
+     update_mount: /sys
+     update_mount: /sys/kernel/debug
+     update_mount: /tmp
+     update_mount: /run <= new
+     mounted: /sys/kernel/debug
+      fsck_update: updating check priorities
+mounted event handled for /dev # udev lib?
+ I"local 0/1 remote 0/0 virtual 3/10 swap 0/0"
+try_mounts # main_loop callback
+ try_mount: / waiting for device  # ??
+ try_mount: /run/lock waiting for /run
+ try_mount: /run/shm waiting for /run
+ try_mount: /run/user waiting for /run
+mountinfo_watcher: mountinfo changed, reparsing
+ parse_mountinfo_file: updating mounts
+  <nothing new>
+mounted event handled for /sys/kernel/debug # udev lib?
+ I"local 0/1 remote 0/0 virtual 3/10 swap 0/0"
+ try_mount: / waiting for device  # ??
+ try_mount: /run/lock waiting for /run
+ try_mount: /run/shm waiting for /run
+ try_mount: /run/user waiting for /run
+try_mounts # main_loop callback
+ try_mount: / waiting for device # ??
+ mount /run/lock &
+ mount /run/shm &
+ mount /run/user &
+ run_mount
+  I"mounting /run/lock"
+  spawn: mount -n -t tmpfs -o nodev,noexec,nosuid,size=5242880 none /run/lock [832]
+spawn_child_handler
+ I"[832] exited normally"
+  run_mount_finished # proc.handler
+   parse_mountinfo
+    parse_mountinfo_file: updating mounts
+     <same>
+     update_mount: /run/lock <= new
+     mounted: /run/lock
+      fsck_update: updating check priorities
+---- /run/shm
+mounting event handled for /run/shm # (udev lib?)
+ run_mount
+  I"mounting /run/shm"
+  spawn: mount -n -t tmpfs -o nosuid,nodev none /run/shm [854]
+spawn_child_handler
+ I"[854] exited normally"
+  run_mount_finished # proc.handler
+   parse_mountinfo
+    parse_mountinfo_file: updating mounts
+     <same>
+     update_mount: /run/shm <= new
+     mounted: /run/lock
+      fsck_update: updating check priorities
+---- /run/user
+mountinfo_watcher: mountinfo changed, reparsing
+ parse_mountinfo_file: updating mounts
+  <nothing new>
+
+
+--------------------------------------------------------------------------------
+update_physical_dev_ids(mnt)
+ navigate sysfs ?
+ mnt.physical_dev_ids = hash_string_new(mnt, 10)
+ devices = list_new(NULL)
+ if mnt.udev_device: add_device(devices, NULL, mnt.udev_device, NULL)
+ else ?
+ while devices list not empty
+  ?
+--------------------------------------------------------------------------------
+fsck_update()	# called from mounted, run_fsck, run_fsck_finished
+ locks = hash_string_new(NULL, 10)
+ D"fsck_update: updating check priorities"
+ foreach mount
+  if mnt.fsck_pid <= 0: continue # always the case, since we never run fsck :(
+  ...
+
+--------------------------------------------------------------------------------
+try_udev_device(udev_device)
+ if subsystem != block: return
+ if action != (add|change): return
+ D"try_udev_device: $subsystem %devname $uuid $label"
+ for all mounts
+  if mnt.device==devname
+   D"try_udev_device: $MOUNT_NAME by name"
+  else
+   ?devlinks?
+  mnt.udev_device = udev_device
+  mnt.physical_dev_ids_needed = TRUE
+  run_fsck(mnt)
+--------------------------------------------------------------------------------
+udev_catchup()
+ udev_enum = udev_enumerate_new(udev)
+ udev_enumerate_add_match_subsystem(udev_enum, "block")
+ D"udev_catchup: catching up"
+ foreach device_path in udev_enum
+  udev_device = udev_device_new_from_syspath()
+  try_udev_device()
+--------------------------------------------------------------------------------
+mount_policy()
+ for each mount
+  if mnt.device==none & has_option(mnt, 'optional', FALSE) & !supported_FS(type)
+   D"mount_policy: $MOUNT_NAME: dropping unknown filesystem"
 --------------------------------------------------------------------------------
 has_option(mnt, option, current)
  opts = current ? mnt.mount_opts : mnt.opts
@@ -54,7 +353,14 @@ new_mount(mnt, device, check, type, opts)
  list_add(mounts, &mnt.entry)
  update_mount()
 --------------------------------------------------------------------------------
-parse_mountinfo_file(reparsed)
+parse_mountinfo # called from main & run_mount_finished
+ if mountinfo: parse_mountinfo_file(reparse=TRUE)
+ else
+  mountinfo = fopen(/proc/self/mountinfo, "r")
+  parse_mountinfo_file(reparse=FALSE)
+  io_add_watch(fileno(mountinfo), mountinfo_watcher)
+--------------------------------------------------------------------------------
+parse_mountinfo_file(reparsed) # called from parse_mountinfo & mountinfo_watcher
  # we parse /proc/self/mountinfo, ie currently-active mounts.
  # We put parsed opts into mnt.mount_opts.
  # Unless we've never seen this mountpoint before, we leave mnt.opts alone.
@@ -70,6 +376,10 @@ parse_mountinfo_file(reparsed)
    else
     new_mount(mnt, device, -1, type, opts)
    mnt.mount_opts = opts
+   if reparsed:
+    mounted(mnt)
+   else
+    mnt.mounted = TRUE
 --------------------------------------------------------------------------------
 parse_fstab(filename)
  D"parse_fstab: updating from $filename"
@@ -93,12 +403,43 @@ spawn_child_handler(proc, status)
   "mount $MOUNT_NAME [$pid] exited normally"
   if proc.handler: handler(mnt, pid, status) # ie call run_mount_finished()
 --------------------------------------------------------------------------------
-mounted(mnt)
- mnt.mounted=TRUE
+trigger_events(mnt) # called from mounted() & skip_mount()
+ I"local finished"; emit_event("local-filesystems")
+ I"swap finished"; emit_event("all-swaps")
+ I"All filesystems mounted"; emit_event("filesystem")
+--------------------------------------------------------------------------------
+skip_mount(mnt) # called from :
+		#	plymouth_update(can't connect), 
+		#	plymouth_answer(key=S)
+ 
+--------------------------------------------------------------------------------
+mark_mounted() # called from main right after mount_policy()
+ foreach mount
+  if mnt.mounted & !needs_remount(mnt)
+   mounted(mnt)
+--------------------------------------------------------------------------------
+mounted_event_handled(void *data, DBusMessage *msg)
+ # called by upstart_emit_event() after it delivers emit_event(mounted)'s event?
+ mnt.mounted = TRUE
+ main_loop_interrupt()
+ I"mounted event handled for $mountpoint"
+ unref(mnt.mount_opts, mounts)
+ mounted.mount_opts = NULL # "we're not read-only anymore"
+ if mnt.needs_mtab:
+  run_mount(mnt, TRUE)
+ increment num_TAG_mounted where TAG={local, remote, virtual, swap}
+ trigger_events()
+ fsck_update()
+--------------------------------------------------------------------------------
+mounted(mnt) # called from:
+	     # 	parse_mountinfo_file(), 
+	     #  mark_mounted(), 
+	     #  run_mount_finished()
+	     #  run_swapon_finished()
+ D"mounted: $MOUNT_NAME"
  mnt.error = ERROR_NONE
  plymouth_update(FALSE)
- emit_event("mounted", mnt)
- unref(mnt.mount_opts, mounts)
+ emit_event("mounted", mnt, mounted_event_handled)
  fsck_update()
 --------------------------------------------------------------------------------
 run_mount(mnt, fake)
@@ -119,15 +460,13 @@ run_mount(mnt, fake)
  else if !mnt.remote: spawn(wait=TRUE, handler=run_mount_finished)
  else spawn(wait=FALSE, handler=run_mount_finished)
 --------------------------------------------------------------------------------
-emit_event(name, mnt)
+emit_event(name, mnt, cb)
  if mnt:
   DEVICE=$mnt.device
   MOUNTPOINT=$mnt.mountpoint
   TYPE=$mnt.type
   OPTIONS=$mnt.opts
-  upstart_emit_event(upstart, name, env, TRUE)
- else
-  upstart_emit_event(upstart, name, NULL, FALSE)
+ upstart_emit_event(upstart, name, cb)
 --------------------------------------------------------------------------------
 try_mount(mnt, force) # force=FALSE always AFAIK
 foreach mnt.deps
@@ -156,7 +495,7 @@ try_mounts()  # called from main(); also is our main_loop() callback
 --------------------------------------------------------------------------------
 run_mount_finished(mnt, pid, status)
  mnt.error = ERROR_NONE
- if !mnt.mounted: <parse mountinfo to see what mount did>
+ if !mnt.mounted: <parse_mountinfo() to see what mount did>
  if !mnt.mounted: mounted(mnt)
 --------------------------------------------------------------------------------
 run_fsck(mnt)
