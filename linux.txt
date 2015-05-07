@@ -8,6 +8,181 @@ www.linux-arm.org/pub/LinuxPlatform/RealViewLink/Booting_ARM_Linux_SMP_on_MPCore
 https://www.kernel.org/doc/gorman/pdf/understand.pdf
 http://elinux.org/Tims_Notes_on_ARM_memory_allocation
 -------------
+init/do_mounts*.c
+Note: we have
+	CONFIG_ROOT_NFS=y
+	CONFIG_BLOCK=y
+	CONFIG_BLK_DEV_FD= not in .config
+----
+default root_mountflags = MS_RDONLY | MS_SILENT <include/uapi/linux/fs.h>
+__setup("root=",root_dev_setup) -> saved_root_name
+__setup("rw",readwrite) -> saved_root_name &= ~MS_RDONLY
+__setup("ro",readonly) -> root_mountflags |= MS_RDONLY
+__setup("rootwait",rootwait_setup) -> root_wait = 1
+__setup("rootflags=",root_mount_data) -> root_mount_data = str
+__setup("rootfstype=",fs_names_setup) -> root_fs_names = str
+__setup("rootdelay=",root_delay_setup) -> root_delay = strtoul(str)
+----
+name_to_dev_t(name)
+  special names: 
+  	/dev/nfs=Root_NFS
+  	/dev/ram=Root_RAM0
+	/dev/$disk_name$decimal = 
+	  blk_lookup_devt(name, partno) -> iterates over block_class devs
+	PARTUUID=...
+----
+do_mount_root(name, fs, flags, data)
+  if (sys_mount(name, /root, fs, flags, data)) return err
+  sys_chdir(/root)
+  ROOT_DEV = pwd.s_dev
+  "VFS: Mounted root ($type filesystem) $readonly on device $major:$minor"
+----
+mount_block_root(name, flags)
+  fs_names = alloc_page()
+  get_fs_names(fs_names) # assign {rootfstype= option, FS list) to fs_names
+  foreach fs_names
+    if (!do_mount_root(name, fs_name, flags, root_mount_data)) return
+    if EINVAL try next fs_name
+    bad superblock on root device:
+      "VFS: Cannot open root device $root_device_name or $bdevname: error $err"
+      printk_all_partitions()
+      "Kernel panic - not syncing: VFS: Unable to mount root fs on $bdevname"
+  "List of all partitions"
+  printk_all_partitions()
+  "No filesystem could mount root, tried: ..."
+  "Kernel panic - not syncing: VFS: Unable to mount root fs on $bdevname"
+----
+create_dev(name, dev_t dev)
+  sys_unlink(name)
+  sys_mknod(name, S_IFBLK|0600, dev)
+----
+mount_root()
+ if ROOT_DEV==Root_NFS
+   if (mount_nfs_root()) return
+ create_dev(/dev/root, ROOT_DEV)
+ mount_block_root(/dev/root, root_mountflags)
+----
+prepare_namespace() # called by main.c:kernel_init_freeable() if exists(/init)
+ if saved_root_name[0]
+   root_device_name = saved_root_name
+   ROOT_DEV = name_to_dev_t(root_device_name)
+   if !strncmp(root_device_name, /dev/, 5)
+     root_device_name += 5
+ mount_root()
+ devtmpfs_mount("dev")
+ sys_mount(., /, NULL, MS_MOVE, NULL)
+ sys_chroot(.)
+----------
+devtmpfs_mount(mntdir) # drivers/base/devtmpfs.c
+  # only implemented if CONFIG_DEVTMPFS_MOUNT
+  sys_mount("devtmpfs", mntdir, "devtmpfs", MS_SILENT, NULL)
+----------
+initrd_load	# init/do_mounts_initrd.c
+  # enabled unless no_initrd bootparam defined
+  create_dev(/dev/ram, Root_RAM0)
+  # "load the initrd data into /dev/ram0 and execute it as initrd". linuxrc?
+  if (rd_load_image(initrd.image))
+    handle_initrd() 
+----------
+ramfs-root-fs-initramfs.txt
+With ramfs you basically mount the disk cache as a filesystem. Always dirty.
+  cf older "ram disk": synthetic block device made out of RAM.
+tmpfs is a derivative of ramfs: size limit hence usable by normal users.
+rootfs is a special instance of ramfs-tmpfs.
+This is entry0 in mountall's lib/init/fstab.
+Systems just mount another fs over rootfs and ignore it.
+You can't unmount rootfs.
+
+All 2.6 kernels contain initramfs; kernel extracts into rootfs & execs /init.
+	Q where is this code? And what if root= also used?
+initramfs requires no no kernel FS; simple cpio extraction code stored __init.
+Contrary to txt doc/2.6, current kernel auto-mounts /dev/root where ROOTDEV is
+	root= OR  ??
+initrd (init ramdisk) was a gzipped _filesystem_ image (eg ext2).
+initramfs impls (eg busybox switch_root) must
+	find -xdev / -exec rm '{}' ';'
+	overmount rootfs with the new root
+		cd /newmount
+		mount --move . /
+		chroot .
+	attach stdio to the new /dev/console
+	exec the new init
+----------
+prepare_namespace
+  initrd_load
+  mount_root
+    mount_block_root
+      do_mount_root
+----------
+summary of root filesystem init:
+  "devtmpfs is auto-mounted after kernel mounts root filesystem" (devtmpfs.c)
+first, devtmpfsd
+	mount devtmpfs / devtmpfs
+	chdir /..  # traverse into overmounted root
+	chroot .
+Then prepare_namespace() does:
+	create_dev(/dev/root) ?
+	mount -o root_mountflags /dev/root /root 
+	chdir /root
+	devtmpfs_mount("dev") ??
+	mount --move . /
+	chroot .
+---
+when does current become defined? Percpu handled _after_ rootfs init, no?
+  ans: in threads created by init/main.c:rest_init().  percpu?
+================================================================================
+if /init does NOT exist
+  if !initrd_load
+    mknod /dev/root ROOT_DEV, where ROOT_DEV= name_to_dev_t(root=) or 0,0 ??
+    	beats me what if anything dev_t=(0,0) means, but that's irrelevant to us
+	ie /dev/root = synonym for the root device (mmcblk0p2)
+    mount /dev/root /root --type <each supported filesystem in turn>
+    
+================================================================================
+early_param(str, fn) vs __setup(str, fn): former sets obj_kernel_param.early=1
+main.c:unknown_bootoption builds envp_init[], argv_init[] passed via do_execve()
+  Note any unknown param=val bootargs are put in envp_init[]
+Before start_kernel processes cmdline, setup_arch calls parse_early_options
+which only processes params defined early=1.
+================================================================================
+devtmpfsd
+  sys_mount("devtmpfs", "/", "devtmpfs", MS_SILENT, "mode=0755")
+  chdir /..  # traverse into overmounted root
+  chroot .
+  loop forever, handling mknod/rmnod requests
+devtmpfs_init
+  register_filesystem(&dev_fs_type) # dev_fs_type = { "devtmpfs", dev_mount }
+  kthread_run(devtmpfsd, "kdevtmpfs")
+  wait for devtmpfsd to enter request-processing loop
+kernel_init
+  kernel_init_freeable
+    sched_init_smp
+    do_basic_setup
+      driver_init
+        devtmpfs_init
+        devices_init
+        buses_init
+        classes_init
+        platform_bus_init
+    if /init does NOT exist
+      prepare_namespace
+  free_initmem
+  run_init_process
+rest_init
+  kernel_thread(kernel_init)
+  kernel_thread(kthreadd)
+  cpu_idle
+start_kernel
+  ...
+  rest_init
+================================================================================
+devtmpfs.c defines the global ftns:
+  devtmpfs_create_node()	# called from core.c:device_add()
+  devtmpfs_delete_node()	# called from core.c:device_del()
+These guys enqueue requests handled by devtmpfsd.
+Ie: device nodes are NOT CREATED BY UDEV.
+================================================================================
+================================================================================
 Makefiles
 Link order is significant for module_init() / __initcall() functions.
 If CONFIG_FOO=y (or m), then obj-$(CONFIG_FOO) += foo.o, then file is ignored.

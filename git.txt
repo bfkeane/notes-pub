@@ -76,6 +76,8 @@ Plumbing vs porcelain
   linux-xlnx/.git/config: repository-specific config
   ~/.gitconfig: user-specific ("global") config
   /etc/gitconfig: system-wide config
+  	git config --global user.name "John Doe"
+  	git config --global user.email johndoe@example.com
 --------------------------------------------------------------------------------
 http://schacon.github.io/gitbook/1_the_git_object_model.html
 object = {type, size, content}
