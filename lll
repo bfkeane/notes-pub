@@ -1,0 +1,32 @@
+http://en.wikipedia.org/wiki/List_of_Fedora_releases
+http://askubuntu.com/questions/517136/list-of-ubuntu-versions-with-corresponding-linux-kernel-version
+wikipedia/Upstart
+
+------------
+--- lsb_release -i -r; uname -r -----------
+CentOS 5 Released April2007.
+CentOS 5.10.	kernel 2.6.18.371.
+CentOS 5.4.	kernel 2.6.18.164.
+CentOS 5.2.	kernel 2.6.18.92.
+CentOS 6 Released July2011.
+CentOS 7 Released July2014.
+
+Fedora 9.	Upstart replaced sysvinit
+Fedora 15:	Systemd
+Fedora 16.	kernel 3.1.0.			Xilinx AC701
+Fedora 17.	kernel 3.9.8.
+
+------------
+Ubuntu 06.10 (Edge Eft).                <Upstart>
+Ubuntu 11.10 (Oneiric Ocelot).          kernel 3.0
+Ubuntu 12.04 (Precise Pangolin).        kernel 3.2+
+Ubuntu 12.10 (Quantal Quetzal).         kernel 3.8.0
+Ubuntu 14.04 LTS (Trusty Tahr).         kernel 3.16
+Ubuntu 15.04 (Vivid Velvet).            <systemd>
+----------------
+------------
+MacOS
+10		2001. PowerPC only
+10.4 (Tiger)	2005. launchd
+10.5 (Leopard)	2007. PowerPC + x86.
+10.10

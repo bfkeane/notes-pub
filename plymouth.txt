@@ -1,0 +1,65 @@
+We've disabled --attach-to-session, so plymouth error not related to log file.
+I think plymouth debug logging will go to screen unless we use --debug-file=f.
+--------------------------------------------------------------------------------
+I see nothing on screen. With --debug-file=xx I do see ply_trace() msgs.
+--------------------------------------------------------------------------------
+http://web.dodds.net/~vorlon/wiki/blog/Plymouth_is_not_a_bootsplash/
+plymouth src README
+--------------------------------------------------------------------------------
+ctl client	/bin/plymouth			$plymouth/src/client
+...        	/bin/plymouth-upstart-bridge	$plymouth/src/upstart-bridge
+boot daemon	/sbin/plymouthd			$plymouth/src
+--------------------------------------------------------------------------------
+boot daemon: src/main.c, src/ply-boot-server.c. Latter has main() for dbg only.
+--------------------------------------------------------------------------------
+boot daemon options
+--attach-to-session	redirect console msgs from screen to log.
+--------------------------------------------------------------------------------
+plymouth.conf
+	start on 'starting mountall' or runlevel [016]
+--------------------------------------------------------------------------------
+2 modes: boot, shutdown.
+plymouthd --debug --debug-file=/tmp/ply-debug
+To see boot msgs at any time: press escape
+	dumped to /var/log/boot.log.
+--------------------------------------------------------------------------------
+logger
+--debug enables tracing.
+looks like it writes to STDERR_FILENO.
+if plymouth.debug=file
+	main:check_verbosity() calls ply_logger_set_output_fd() to redirect
+	stderr to file.
+--------------------------------------------------------------------------------
+#UNUSED#attach_to_running_session(state)	# called from main
+Perhaps with proper plymouth.conf you can revert --attach-to-session.
+--------------------------------------------------------------------------------
+ply_boot_server_new
+--------------------------------------------------------------------------------
+prepare_logging
+ state.system_initialized
+ state.session = ply_terminal_session_new()
+--------------------------------------------------------------------------------
+initialize_environment(&state)
+  check_verbosity()
+  check_for_consoles()
+  mkdir /run/plymouth
+--------------------------------------------------------------------------------
+ply_boot_server_new(bazillion on_xxx() callbacks, state)
+--------------------------------------------------------------------------------
+check_for_consoles(state)
+ if can't add_consoles_from_file(/sys/class/tty/console/active)
+ 	falling back to kernel command line: /dev/ttyPS0
+--------------------------------------------------------------------------------
+main
+ initialize_environment(&state)
+ start_boot_server(&state)
+ ply_progress_load_cache(state.progress, get_cache_file_for_mode(state.mode))
+ ply_event_loop_run()
+ 	system_initialized:
+		client/ply_boot-client.c:
+			ply_boot_client_tell_daemon_system_is_initialized()
+	?print_connection_process_identity: connections from
+		# plymouth-log.conf on filesystem (ie all=virt+local+remote)
+		/bin/plymouth update-root-fs --read-write 
+		/bin/plymouth --ping
+		/bin/plymouth show-splash # plymouth.conf post-start script

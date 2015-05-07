@@ -28,6 +28,11 @@ Q
      explains that /dev/root symbolizes the current root device,
      whether defined via kernel cmdline, busybox init, or a non-existent
      device(?).
+   ans2: it DOES refer to ramfs-rootfs-initramfs! See mount status at end of
+     uramdisk.image.gz /init:
+	     rootfs on / type rootfs (rw,relatime)
+	     ...
+
 . Is run_mount(fake) a pejorative for mount's -f (fork) option?
 --------------------------------------------------------------------------------
 compare ok vs nk (remount ro) log
