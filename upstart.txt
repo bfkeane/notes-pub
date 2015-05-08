@@ -1,0 +1,9 @@
+init(5): 
+job.conf file: console log
+  stdout/err redirected to log: appended to
+    /var/log/upstart/<job-log-file>
+  If job.conf has 'instance':
+    /var/log/upstart/$job-$instance.log
+  If directory for system jobs does not exist, output will be cached until job
+  finishes.
+--------------------------------------------------------------------------------
