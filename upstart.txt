@@ -1,9 +1,35 @@
-init(5): 
-job.conf file: console log
+init(5) manpage:
+job.conf file: 'console log' (default)
   stdout/err redirected to log: appended to
     /var/log/upstart/<job-log-file>
   If job.conf has 'instance':
     /var/log/upstart/$job-$instance.log
   If directory for system jobs does not exist, output will be cached until job
   finishes.
+A few jobs (failsafe, mountall, rc) specify 'console output' = /dev/console.
+rcS job: 'console owner' = tty driver foreground process?
+ssh job: 'console none' = /dev/null.
 --------------------------------------------------------------------------------
+1. ZSBL firmware loads FSBL (boot.bin) from boot partition:
+  Can firmware read VFAT filesystem (to load boot.bin)?
+  Does firmware depend on us copying boot.bin to /mnt/boot first
+  (which only happens b/c it's alphabetically first)?
+  Ubuntu+on+Zynq shows boot.bin copied not-first, ergo ZSBL knows VFAT.
+2. FSBL contains {fsbl.elf + u-boot.elf}. Former loads latter.
+3. u-boot loads {uImage, uramdisk.image.gz, devicetree} from boot partition.
+4. kernel boots
+--------------------------------------------------------------------------------
+Ubuntu+on+Zynq lists zynq mods to ubuntu-core incl PS0-1 uarts + 5 pkgs.
+See notes/diffs-between-zynq-ubuntu-core-AND-eye6, or
+    notes-pub/zynq-vs-ubuntu-core.txt
+--------------------------------------------------------------------------------
+mountall(startup)
+	udev(vfs)		
+		net-iface(net-dev-added): dependent on local-fs, no?
+			rc-sysinit(static-net-up)
+				cron(runlevel2)
+				ntp(-)
+	ssh(fs)
+	rsyslog(fs)
+	failsafe(fs & net-dev-up lo)
+		rc_sysinit(failsafe-boot)

@@ -1,0 +1,108 @@
+GNU Autoconf
+See flow diagram @ wikipedia/Configure_script.
+--------------------------------------------------------------------------------
+http://www.gnu.org/software/autoconf/manual/autoconf.html
+--------------------------------------------------------------------------------
+[Makefile.am] --automake--> [Makefile.in, configure.ac] --autoconf-> [configure]
+	---> { Makefiles, config.h, config.status, config.cache, config.log }
+--------------------------------------------------------------------------------
+To produce a configure script for a sw pkg,
+create configure.ac that contains invocations of Autoconf macros that test
+system features your pkg needs.
+
+You'll use existing Autoconf macros,
+plus template macros to produce custom checks.
+
+configure uses lowest common denominator of sh functionality.
+It's a layer atop sh, a (m4) macro expander producing a pure sh script.
+
+autoconf = compiler that takes autoconf program, configure.ac, and xforms it
+into a portable shell script, configure.
+---
+"Whenever you expect macro expansion, expect quote expansion" ie expect one
+level of quotes to be lost.
+
+scn 3.1.3: std configure.ac layout.
+
+autoscan(1): examines src files & generates preliminary configure.in.
+----------------------
+autoconf processes configure.in with m4 using the autoconf macros,
+including $pwd/aclocal.m4.
+----------------------
+scn 4.6. configure appears to do everything itself, but there is a hidden slave:
+config.status, which instantiates files:
+	AC_CONFIG_FILES, AC_CONFIG_HEADERS.
+----------------------
+scn 4.8. Each subdir containing smthg to be compiled or installed should come
+with a file Makefile.in from which configure creates Makefile:
+	subst Makefile.in's @var@ with its value -> "output variables" =
+		normal shell vars.
+4.8.1 preset output vars: CFLAGS, srcdir
+4.8.2 installation dir vars: bindir, libdir, prefix
+----------------------
+4.9.1 config header templates: config.h.in -> config.h.
+	Cf Kbuild: CONFIG_xxx becomes commented out if not selected,
+	just like config.h #undef directives.
+	But Kbuild depends on user input (or defconfig);
+	autoconf automatically tests compiler/library.
+	Q: how does autoconf test-run a cross-compiled test? Or does autoconf
+	never actually run any a.out files?
+4.9.2 autoheader generates config.h.in.
+	autoheader scans configure.ac to figure which cpp symbols to define:
+	{AC_CHECK_HEADERS, AC_CHECK_FUNCS, user-defined templates}.
+	mountall's config.h.in was generated using autoheader,
+	bc configure.ac gives the template: AC_CONFIG_HEADERS([config.h]).
+4.13 default prefix = /usr/local.
+	convenience: AC_PREFIX_PROGRAM(program). I.e. if your PATH includes:
+		/home/pkg/Vivado-2013.2/SDK/2013.2/gnu/arm/lin/bin/
+	and you configure to build updated arm-xilinx-linux tool(s),
+	then set AC_PREFIX_PROGRAM(arm-xilinx-linux-gnueabi-gcc)
+	and you'll automatically set 
+		prefix=/home/pkg/Vivado-2013.2/SDK/2013.2/gnu/arm/lin
+--------------------------------------------------------------------------------
+Existing Tests
+5.2.2	AC_CHECK_PROG(var, prog-to-check-for, val-if-found, val-if-not-found)
+	AC_CHECK_TOOL(ranlib)	--host=i386-gnu		i386-gnu-ranlib
+	AC_CHECK_TARGET_TOOL	AC_CANONICAL_TARGET
+5.3.3 Generic function checks: AC_CHECK_FUNC etc.
+	Autoconf follows a philosophy that was formed over the years by those
+	who have struggled for portability: isolate the portability issues in
+	specific files, and then program as if you were in a Posix environment.
+	Suitable replacements for many such problem functions are available
+	from Gnulib.
+5.6.3 Generic header checks: AC_CHECK_HEADER etc.
+--------------------------------------------------------------------------------
+Writing Tests
+6.2 Autoconf tests follow a common scheme: feed some program with some input,
+	and most of the time, feed a compiler with some source file.
+6.2.3 Generating Sources
+6.6 Avoid running test programs if possible, because this prevents people from configuring your package for cross-compiling.
+--------------------------------------------------------------------------------
+Results of Tests: {def cpp symbol, set output var} in output files (Makefiles).
+Output var = shell var whose val is subst'd into files that configure outputs.
+
+7.1 def cpp symbol: AC_DEFINE.
+    I guess AC_CONFIG_HEADERS redirects accumulated DEFS to .h file.
+    AC_DEFINE(var, val, [description]): desc only useful w/ AC_CONFIG_HEADERS.
+7.2 Set output var: AC_SUBST, AC_SUBST_FILE.
+   AC_OUTPUT replaces instances of @variable@ in input files w/ the value
+   that the shell var has when AC_OUTPUT is called.
+   configure:ac:
+   	AC_SUBST_FILE([host_frag])
+	host_frag=$srcdir/conf/sun4.mh
+   Makefile.in:
+   	@host_frag@
+7.4 cache variable names reveal structure of autoconf system:
+	${pkg-prefix}_cv_${value-type}_${specific-value}-${additional-options}
+	where value-type = {FUNC, HEADER, LIB, PROG, SYS...} #scn 10.2.
+	where pkg-prefix = {m4=M4sugar,AS=M4sh,AH=autoheader,AM=automake,..}. Eg
+		ac_cv_prog_gcc_traditional
+--------------------------------------------------------------------------------
+14.1 Target triplet = cpu-vendor-os, where os={system or kernel-system}.
+  For cross-compiling:
+  	--build=
+  	--host=
+  	--target=
+  build!=host <=> cross-compiling. Eg
+  	./configure --build=i686-pc-linux-gnu --host=m68k-coff
+  target is for compilers; it's meaningless for ordinary packages.

@@ -1,0 +1,65 @@
+dpkg-query --showformat={Depends} -s ucf
+--------------------------------------------------------------------------------
+3 classes of dpkg(1) info:
+pkg states
+
+	[not-installed] --> [config-files] --> [unpacked] --> 
+	[half-configured] --> [triggers-awaited] --> [triggered-pending] -->
+		[installed]
+
+pkg selection states
+	[install]
+	[hold]
+	[deinstall]	remove all files except config files
+	[purge]
+
+pkg flags
+	[reinst-required]
+--------------------------------------------------------------------------------
+dpkg(1)
+installation (dpkg -i)
+	extract ctl files
+	run pre-inst script
+	unpack new - backup old
+	postrm old
+	configure:
+		unpack new conffiles - backup old (will restore on error)
+		run postinst script
+removal
+	run prerm script
+	remove installed files
+	run postrm script
+--------------------------------------------------------------------------------
+deb(5): components of binary .deb pkg = ar archive.
+	control
+	conffiles
+	preinst
+	postinst
+	prerm
+	postrm
+--------------------------------------------------------------------------------
+apt-get
+pkg names vs filenames: apt-utils vs apt-utils_0.9.7.5ubuntu5_amd64.deb
+conflict resolution system
+dpkg database
+default release = APT::Default-Release
+apt-preferences(5)
+triggers?
+---
+update # resynchronize (fetch) pkg index files from their sources ~ git
+	# ie retrieve+scan debian Packages.gz
+upgrade	# installs newest version of all currently installed packages
+install $pkg # pkg may be posix regex
+remove $pkg
+purge $pkg
+download $pkg
+source $pkg # source packages not installed+tracked like .deb; simply ~tarballs
+source --host-architecture $arch --compile $pkg	# make .deb w/ dpkg-buildpackage
+build-dep [--host-architecture $arch] $pkg
+--------------------------------------------------------------------------------
+Debian Policy manual
+dpkg-architecture: debian&GNU style arch spec strings. Build-vs-host arch.
+--------------------------------------------------------------------------------
+https://wiki.debian.org/Packaging
+https://wiki.debian.org/IntroDebianPackaging	<<=== very good
+A source pkg = {upstream tarball, debian/ directory, .dsc description}

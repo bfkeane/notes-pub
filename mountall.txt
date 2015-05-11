@@ -1,3 +1,7 @@
+debian/control:Description: "filesystem mounting tool
+ mountall mounts filesystems when the underlying block devices are
+ ready, or when network interfaces come up, checking the filesystems first."
+--------------------------------------------------------------------------------
 TODO
 . why no virtual-systems event? ie why not all vfs mounted (& udev launched) ?
 . why root mnt.ready=true when rw but no when ro?
@@ -124,7 +128,7 @@ nodev	fusectl
 nodev	pstore
 nodev	mqueue
 --------------------------------------------------------------------------------
-State machine
+State diagram
 
 main_loop -> try_mounts ---(all mounted)---> main_loop_exit
                 |
@@ -736,4 +740,5 @@ x) open_control_server()
 	virtual-filesystems
 	local-filesystems
 	filesystems = "aggregate event for all filesystems" = {virt, loc, rem}
+--------------------------------------------------------------------------------
 11) plymouth_progress(): only if plymouth
