@@ -2,11 +2,34 @@ debian/control:Description: "filesystem mounting tool
  mountall mounts filesystems when the underlying block devices are
  ready, or when network interfaces come up, checking the filesystems first."
 --------------------------------------------------------------------------------
+local fs:
+	passno==0: fsck if /root or /forcefsck
+	passno!=0: fsck if unmounted or needs_remount()
+--------------------------------------------------------------------------------
+cross-compilation on urepo (after adding xilinx .../gnu/arm/lin/bin to my PATH):
+	./configure --prefix=$(pwd)/usr/local --build=i686-pc-linux-gnu --host=arm-xilinx-linux-gnueabi
+(I'm almost sure the --build= is superfluous.)
+Per:
+http://www.gnu.org/software/libc/manual/html_node/Configuring-and-compiling.html
+"You’ll probably need the ‘--with-headers’ option too"
+and per:
+http://stackoverflow.com/questions/24996357/usr-include-dbus-1-0-is-unsafe-for-cross-compilation-in-maliit-framework
+"install those cross-compiled libaries in your system and use the option 
+	-L/path/to/your/ppc/libs/dir and -I/path/to/your/ppc/headers"
+CHECK OUT BELS BOOK!!
+--------------------------------------------------------------------------------
 TODO
 . why no virtual-systems event? ie why not all vfs mounted (& udev launched) ?
 . why root mnt.ready=true when rw but no when ro?
   ans: mark_mounted() only marks mounted=TRUE if !needs_remount().
 ____
+--------------------------------------------------------------------------------
+try_mounts & run_fsck dominate (are only callers of) try_mount(mnt,force).
+Only calls to run_fsck
+	try_mount: does not call run_fsck if (!ready !nodev local /dev/xxx).
+	try_udev_device calls run_fsck(mnt) if ADD/CHANGE mnt.device.
+try_mounts only calls try_mount if (!mounted || needs_remount). So if we mark
+rootfs as ro in fstab, mountall will neither remount nor fsck it.
 --------------------------------------------------------------------------------
 Note interesting jobs /etc/init/mounted-*.conf, esp mounted-dev.conf (MAKEDEV).
 /sbin/MAKEDEV: simple to roll your own getopts().

@@ -1,4 +1,23 @@
+-o debug::BuildDeps=true
+--This almost worked for lsof, but actually I'm afraid it built for i386-------
+apt-get build-dep -aarmhf foo-pkg
+apt-get source foo-pkg
+cd foo-pkg-*
+dpkg-buildpackage -aarmhf
+--------------------------------------------------------------------------------
+dpkg --add-architecture arm-linux-gnueabi
+apt-get update
+
+dpkg --add-architecture armhf
+apt-get update
+
+apt-rdepends --build-depends --follow=DEPENDS nautilus
+
+apt-get build-dep $src-pkg --host-architecture arm-linux-gnueabi
+--------------------------------------------------------------------------------
 dpkg-query --showformat={Depends} -s ucf
+apt-get install nfs-common --print-uris
+apt-rdepends tcpdump # may need to first "sudo apt-get install apt-rdepends"
 --------------------------------------------------------------------------------
 3 classes of dpkg(1) info:
 pkg states

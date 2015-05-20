@@ -1,3 +1,6 @@
+Q
+What if you say 'start <job>' when job 'starts on' events that haven't occurred?
+--------------------------------------------------------------------------------
 init(5) manpage:
 job.conf file: 'console log' (default)
   stdout/err redirected to log: appended to
@@ -23,13 +26,19 @@ Ubuntu+on+Zynq lists zynq mods to ubuntu-core incl PS0-1 uarts + 5 pkgs.
 See notes/diffs-between-zynq-ubuntu-core-AND-eye6, or
     notes-pub/zynq-vs-ubuntu-core.txt
 --------------------------------------------------------------------------------
-mountall(startup)
-	udev(vfs)		
-		net-iface(net-dev-added): dependent on local-fs, no?
-			rc-sysinit(static-net-up)
-				cron(runlevel2)
-				ntp(-)
-	ssh(fs)
-	rsyslog(fs)
-	failsafe(fs & net-dev-up lo)
-		rc_sysinit(failsafe-boot)
+plymouth(starting mountall)
+	mountall(startup)
+		upstart-udev-bridge(starting udev)
+			udev(vfs)
+				udevtrigger(started udev) # cold plug devices
+
+				# upstart-udev-bridge emits net-device-added.
+				# net-iface dependent on local-fs, no?
+				# seems mountall emits vfs only once local-fs rdy.
+				net-iface(net-dev-added): 
+					rc-sysinit(static-net-up)
+						cron(runlevel2)
+						ssh(runlevel2)
+		rsyslog(fs)
+		failsafe(fs & net-dev-up lo)
+			rc_sysinit(failsafe-boot)

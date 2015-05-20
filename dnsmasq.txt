@@ -1,1 +1,6 @@
+interesting options:
+--dhcp-authoritative
+--leasefile=ro
+--dhcp-script
+--------------------------------------------------------------------------------
 check dnsmasq.dhcphosts: (newer) src includes diagnostics?

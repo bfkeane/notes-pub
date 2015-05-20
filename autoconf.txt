@@ -106,3 +106,5 @@ Output var = shell var whose val is subst'd into files that configure outputs.
   build!=host <=> cross-compiling. Eg
   	./configure --build=i686-pc-linux-gnu --host=m68k-coff
   target is for compilers; it's meaningless for ordinary packages.
+--------------------------------------------------------------------------------
+16.7 ./config-sub will output canonicalize triplet.

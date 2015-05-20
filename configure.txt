@@ -1,0 +1,46 @@
+autoconf configure.ac > configure
+./configure --build=i686-pc-linux-gnu --host=arm-linux-gnueabihf --prefix $HOME/src/root
+================================================================================
+dpkg --print-architecture
+sudo dpkg --add-architecture arm # creates /var/lib/dpkg/arch
+apt-get build-dep # works
+apt-get build-dep --host-architecture=arm-linux-gnueabihf  mountall # fails
+================================================================================
+Don't really need xilinx sdk.
+http://askubuntu.com/questions/250696/cross-compile-for-arm
+================================================================================
+--expat-------------------------------------------------------------------------
+apt-get source expat
+cd expat-*
+$configure
+make
+make install
+--libdbus-----------------------------------------------------------------------
+apt-get source libdbus-1-3
+cd dbus-*
+$configure
+make
+make install
+--libnih------------------------------------------------------------------------
+apt-get source libnih
+cd libnih-*
+export LDFLAGS=-Wl,-L$HOME/src/root/lib,-lexpat
+export CPPFLAGS=-I$HOME/src/root/include
+$configure
+make
+make install
+--libudev-----------------------------------------------------------------------
+apt-get source libudev-dev
+cd udev-175
+--glib--------------------------------------------------------------------------
+apt-get source libglib2.0-0
+--zlib--------------------------------------------------------------------------
+apt-get source zlib1g-dev
+
+-Thurs Lab----------------------------------------------------------------------
+http://upstart.ubuntu.com/wiki/CompilingUpstart
+sudo apt-get install bzr
+sudo apt-get install libtool
+sudo apt-get install autopoint
+$configure # worked up until error looking for expat
+------------

@@ -1,0 +1,11 @@
+--------------------------------------------------------------------------------
+job.c
+job_new()
+	upstart flushes job process's log when reaping process?
+	job_register()
+job_register(): register job instance with D-Bus connection
+	dbus_object_new()
+	job_class_emit_instance_added()
+next_state
+	depends both on current state and the goal of the job.
+--------------------------------------------------------------------------------
