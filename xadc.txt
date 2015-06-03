@@ -1,0 +1,3 @@
+ug480 7-series XADC
+--------------------------------------------------------------------------------
+p15. XADC dedicated pins are in Bank 0. Off-chip vs on-chip reference.

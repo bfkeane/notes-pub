@@ -1,0 +1,37 @@
+microzed
+---------------------
+PMOD connects to the PS-side on 8 MIO bank0 pins.
+These same 8 MIOs are routed to MicroHeaders (JX1, JX2).
+
+Each MicroHeader is mainly for PL-side pins although 8 MIOs on JX2.
+One 50-pin PL bank per microheader: Bank34 on JX1, Bank35 on JX2.
+	JX1 also includes JTAG, XADC V, DX (temperature-sensing Diode pins).
+7Z010 has 2 PL I/O banks: bank34-35, each w/ 50 I/O.
+PL I/O banks are unpowered on MicroZed: that's up to the carrier card.
+---------------------
+Default boot mode = QSPI; change jumpers to select SD or JTAG.
+Voltage mode is fixed on MicroZed: 3.3V bank0, 1.8V bank1.
+See Fig 8.
+Blue LED D2 lights on PL config.
+---------------------
+PS MIO allocation (total 54):
+	SD		7
+	QSPI flash	7
+	USB Host	14
+	Enet		14
+	UART		2
+	PMOD+uHdr	8
+	Button,LED	2
+--------------------------------------------------------------------------------
+================================================================================
+Booted uZed in default bootmode:
+filesystems:
+	root=/dev/ram, ie ramdisk. But can't find boot filesystem.
+network:
+	IP-Config: Guessing netmask 255.255.255.0
+	IP-Config: Complete:
+	     device=eth0, hwaddr=00:0a:35:00:01:22, ipaddr=192.168.1.10, mask=255.255.255.0, gw=255.255.255.255
+--------------
+Tried booting from i102 SDcard:
+	no console
+	enet led shows life but can't ping from urepo.

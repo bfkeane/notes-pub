@@ -1,3 +1,4 @@
+git = user-level file system for version control.
 everything is local.
 git stores data as a series of snapshots not diffs.
 snapshot = commit

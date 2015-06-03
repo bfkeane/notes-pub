@@ -34,11 +34,14 @@ plymouth(starting mountall)
 
 				# upstart-udev-bridge emits net-device-added.
 				# net-iface dependent on local-fs, no?
-				# seems mountall emits vfs only once local-fs rdy.
+				# seems mountall emits vfs only once local-fs
+				# rdy.
 				net-iface(net-dev-added): 
-					rc-sysinit(static-net-up)
-						cron(runlevel2)
-						ssh(runlevel2)
+					nfs-home(static-network-up-ntp)
+						ssh(nfs-home)
+						rc-sysinit(nfs-home)
+							cron(runlevel2)
+							ssh(runlevel2)
 		rsyslog(fs)
 		failsafe(fs & net-dev-up lo)
 			rc_sysinit(failsafe-boot)

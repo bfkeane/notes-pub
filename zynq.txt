@@ -1,0 +1,109 @@
+TRM
+
+SoC = {PS, PL}, PS={App Processor Unit, mem-iface, IO periph, Interconnect}.
+
+MIO: PS peripherals share Muxed I/O <= 54 MIO pins.
+SoC devices also can use PL-domain I/Os = EMIO.
+
+Boot ROM (ZSBL) reads mode pins to determine primary boot dev.
+
+PS MIO I/O buffers are split into 2 voltage domains:
+	Bank 0 = pins 0:15.
+	Bank 1 = pins 16:53.
+
+1.4.1. Interconnect:
+	64bit AXI central interconnect.
+	{IOP, APU DMActlr} <-> {DDRctrl, OCR, AXI_GP}
+	local DMA {enet, usb, sd} <-> central interconnect
+	PS masters <-> IOP
+2.5 I/O Peripheral MIO-EMIO Interface Routing
+  PL ~ arm peripheral: arm -> interconnect -> IOP -> {pins, PL}.
+  Pin routing of IOPs I/O signals: MIO/EMIO.
+  Majority of I/O sigs for PS periphs (excepting USB) can be routed to either
+     the PS pins via MIO or the PL pins via EMIO.
+  Bus masters = {?p56?}. p114-115: 
+  	CPUs & ACP
+	AXI_HP
+	S_AXI_GP[1:0]
+	DevC
+	DAP
+	DMAC
+	AHB bus master ports w local DMA units: Enet, USB, SDIO.
+  Interconnect connections (balance bandwidth needs of each ctrl iface):
+     DMA masters: {USB, Enet, SDIO}.
+     {QSPI, SMC}: AHB
+     {GPIO, SPI, CAN, UART, I2C, except SDIO}: APB.
+     All Ctrl-Status regs: APB
+  Figures:
+     "I/O Peripherals System Diagram": (arm)->interconnect->IOP->{pins,PL}
+     "MIO-at-a-Glance" table
+  Pin Assignment considerations for 54 MIO Pins (cf Microchip PIC pin circuits):
+    MIO pins are split across 2 independently configured sets of I/O buffers:
+     Bank 0 MIO[15:0], Bank 1 MIO[53:16]. VMODE boot mode pins-> 1.8 or 2.5/3.3.
+    Boot mode: Mio[8:2] = Boot device, voltage mode.
+    I/O Buffer output enable ctrl.
+    boot from SD card: MIO[45:40].
+    SMC = static mem ctlr = uses lots of MIO.
+2.8 PL I/O Pins
+   User I/O pins: IO_LXXY_#
+   Multi-gigabit serial xcvrs: MGT...
+   Config: DONE, INIT, PROGRAM_B, 
+   XADC: VREF; {V, AD[15:0]}
+--------------------------------------------------------------------------------
+3. APU
+Ifaces to rest of system thru {L2 ctlr, OCM}.
+SCU (snoop ctlr?): all CPU-coherent accesses must go thru SCU via ACP port.
+APU accesses {OCM, DDR, PL, IOP slaves, regs w/in PS sub-blocks}.
+Switching fabric:
+	CX = central interconnect
+	MXSP = master interconnect for slave peripherals
+	SXMP = slave interconnect for master peripherals
+APU System View Diagram (p64). FPGA components:
+   AXI_HP: to DDR ctlr
+   ACP: to SCU
+   S_AXI_GP{1:0}: PL masters wired to {SCU, CX} via SXMP,
+   			whence via CX to {DDR, MXSP}, 
+   			     whence via MXSP to {IOP, AXI_GP_S}.
+   M_AXI_GP{1:0}: PL slaves wired to {IOP masters, L2cache} via MXSP.
+--------------------------------------------------------------------------------
+4. System addresses, ie addresses seen by CPUs & ACP.
+1st GByte: DDR
+2nd GByte: M_AXI_GP0
+3rd GByte: M_AXI_GP1
+4th GByte: {IOP regs, SLCR regs, PS sys regs, CPU private regs}.
+
+Execute-in-place devices: DDR, OCM, SMC, QSPI, PL BRAM via M_AXI_GP{1:0}.
+
+SLCR
+	clk control & status
+	rst control & status
+	APU
+	DDR ctlr
+	MIO config
+IOP map:
+	E000_0000	UART
+	E000_2000	USB
+	E000_4000	I2C
+	E000_6000	SPI
+	E000_8000	CAN
+	E000_A000	GPIO
+	E000_B000	ENET
+	E000_D000	QSPI
+	E000_E000	SMC
+	E010_0000	SDIO
+--------------------------------------------------------------------------------
+5. Interconnect
+--------------------------------------------------------------------------------
+30. XADC
+Support signal bandwidth <= 500 KHz @ sample rate of 1 MSPS; 12bit.
+User-defined alarm thresholds: over-temperature, pwr supply variation.
+Two PS interfaces: PS-XADC much slower (serial) than M_AXI_GP (parallel).
+================================================================================
+ds187: DC & AC Switching Characteristics.
+	I/O levels
+	XADC specs
+================================================================================
+Zynq-7000 AP SoC Overview (ds190)
+Input/Output:
+    I/O pins organized in banks: 50pins per bank
+    Each bank has 1 common Vcco output supply, and 1 Vref (single-ended input).
